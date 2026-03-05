@@ -7,11 +7,11 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
 
-namespace Imeritas.Agent.DadJokes.Tests;
+namespace Imeritas.Agent.DadJokes.Tests.Plugin;
 
 /// <summary>
-/// Unit tests for <see cref="DadJokesPlugin"/> covering kernel function behavior,
-/// system prompt contribution, and classification metadata.
+/// Unit tests for <see cref="DadJokesPlugin"/> covering identity properties,
+/// kernel function behavior, system prompt contribution, and classification metadata.
 /// </summary>
 public class DadJokesPluginTests
 {
@@ -29,7 +29,20 @@ public class DadJokesPluginTests
         _plugin = new DadJokesPlugin(host);
     }
 
-    // ── TellJokeAsync: happy path ────────────────────────────────────────
+    // ── Plugin Identity ───────────────────────────────────────────────────
+
+    [Fact]
+    public void Name_ReturnsExpectedValue()
+    {
+        Assert.Equal("DadJokes", _plugin.Name);
+        Assert.Equal("DadJokes", _plugin.PluginKey);
+        Assert.Equal("DadJokes", _plugin.KernelPluginName);
+        Assert.Null(_plugin.InstanceName);
+        Assert.Equal("Dad Jokes", _plugin.DisplayName);
+        Assert.False(string.IsNullOrEmpty(_plugin.Description));
+    }
+
+    // ── TellJokeAsync: happy path ─────────────────────────────────────────
 
     [Fact]
     public async Task TellJokeAsync_NoCategory_ReturnsSetupPunchlineFormat()
@@ -62,7 +75,7 @@ public class DadJokesPluginTests
         Assert.Contains("Try a different category!", result);
     }
 
-    // ── TellJokeAsync: exception path ────────────────────────────────────
+    // ── TellJokeAsync: exception path ─────────────────────────────────────
 
     [Fact]
     public async Task TellJokeAsync_OnException_ReturnsErrorMessage_DoesNotThrow()
@@ -80,7 +93,7 @@ public class DadJokesPluginTests
         Assert.StartsWith("Error telling joke:", result);
     }
 
-    // ── GetSystemPromptContributionAsync ──────────────────────────────────
+    // ── GetSystemPromptContributionAsync ───────────────────────────────────
 
     [Fact]
     public async Task GetSystemPromptContributionAsync_ReturnsNonNullStringWithCategories()
@@ -96,7 +109,7 @@ public class DadJokesPluginTests
         Assert.Contains("general", result);
     }
 
-    // ── DirectlyInvocableFunctions ────────────────────────────────────────
+    // ── DirectlyInvocableFunctions ─────────────────────────────────────────
 
     [Fact]
     public void DirectlyInvocableFunctions_ContainsTellJoke()
@@ -104,7 +117,7 @@ public class DadJokesPluginTests
         Assert.Contains("tell_joke", _plugin.DirectlyInvocableFunctions);
     }
 
-    // ── SlashCommands ─────────────────────────────────────────────────────
+    // ── SlashCommands ──────────────────────────────────────────────────────
 
     [Fact]
     public void SlashCommands_ContainsJokeCommand()
@@ -114,7 +127,7 @@ public class DadJokesPluginTests
         Assert.Equal("dad_joke", _plugin.SlashCommands[0].TaskType);
     }
 
-    // ── ClassificationExamples ────────────────────────────────────────────
+    // ── ClassificationExamples ─────────────────────────────────────────────
 
     [Fact]
     public void ClassificationExamples_ReturnsTwoExamplesForDadJokeTask()
