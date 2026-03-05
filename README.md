@@ -1,6 +1,6 @@
 # Imeritas.Agent.DadJokes
 
-Dad jokes agent plugin
+Dad Jokes plugin for Imeritas.Agent
 
 ## Build
 
