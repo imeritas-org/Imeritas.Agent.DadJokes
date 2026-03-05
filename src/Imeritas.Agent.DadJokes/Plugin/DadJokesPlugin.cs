@@ -21,7 +21,6 @@ namespace Imeritas.Agent.DadJokes.Plugin;
 public class DadJokesPlugin : IAgentPlugin, IClassificationContributor, IConfigurablePlugin<DadJokesSettings>
 {
     // ── Fields ───────────────────────────────────────────────────────────
-    private readonly PluginHostContext _host;
     private readonly ILogger _logger;
     private readonly JokeService _jokeService = new();
 
@@ -33,7 +32,6 @@ public class DadJokesPlugin : IAgentPlugin, IClassificationContributor, IConfigu
     /// </summary>
     public DadJokesPlugin(PluginHostContext host)
     {
-        _host = host;
         _logger = host.LoggerFactory.CreateLogger<DadJokesPlugin>();
     }
 
@@ -83,29 +81,27 @@ public class DadJokesPlugin : IAgentPlugin, IClassificationContributor, IConfigu
     /// </summary>
     [KernelFunction("tell_joke")]
     [Description("Tells a dad joke, optionally filtered by category")]
-    public async Task<string> TellJokeAsync(
+    public Task<string> TellJokeAsync(
         [Description("Optional joke category (e.g., 'programming', 'food'). Leave empty for any category.")]
         string? category = null)
     {
         try
         {
-            // Resolve tenant settings at call time (singleton plugin pattern)
-            var settings = await _host.TenantContext.GetPluginSettingsAsync<DadJokesSettings>(PluginKey);
+            // If a category was requested but has no matches, return feedback
+            if (!string.IsNullOrWhiteSpace(category) && _jokeService.GetByCategory(category).Count == 0)
+                return Task.FromResult($"No jokes found in category '{category}'. Try a different category!");
 
-            // Get joke from service
+            // Get joke from service (falls back to random if category is null/empty)
             var joke = _jokeService.GetRandomByCategory(category);
 
-            if (joke == null)
-                return $"No jokes found{(category != null ? $" in category '{category}'" : "")}. Try a different category!";
-
             // Return in 'Setup\n\nPunchline' format per AC
-            return $"{joke.Setup}\n\n{joke.Punchline}";
+            return Task.FromResult($"{joke.Setup}\n\n{joke.Punchline}");
         }
         catch (Exception ex)
         {
             // Return error strings, never throw (AC + framework convention)
             _logger.LogError(ex, "Error telling joke for category {Category}", category);
-            return $"Error telling joke: {ex.Message}";
+            return Task.FromResult($"Error telling joke: {ex.Message}");
         }
     }
 
