@@ -10,3 +10,22 @@ Chronological record of significant decisions and changes.
 - Requirements document placed in `docs/REQUIREMENTS.md`
 - CLAUDE.md and agent.yml generated
 - Planning issue created: ##3
+
+## 2026-03-04 — Implementation complete
+
+### Components Built
+
+- **JokeService** (`Services/JokeService.cs`) — Static in-memory joke repository with 20 embedded dad jokes across 6 categories (tech, food, animals, work, science, general). Supports category lookup, random selection, and random-by-category with fallback.
+- **Joke record** (`Services/Joke.cs`) — Immutable `record Joke(string Setup, string Punchline, IReadOnlyList<string> Categories)` for the service layer.
+- **Joke model** (`Models/Joke.cs`) — `record Joke(int Id, string Setup, string Punchline, string[] Categories)` for the model layer.
+- **DadJokesPlugin** (`Plugin/DadJokesPlugin.cs`) — Singleton `IAgentPlugin` with `tell_joke` kernel function. Implements `IClassificationContributor` (slash command `/joke`, classification examples, keyword hints) and `IConfigurablePlugin<DadJokesSettings>`.
+- **DadJokesSettings** (`Models/DadJokesSettings.cs`) — `[PluginSetting]`-decorated config with `MaxJokesPerSession` (default 10).
+- **DadJokesPluginTests** (`Tests/DadJokesPluginTests.cs`) — 7 xUnit tests covering: happy path (no category, valid category, invalid category), exception error-string behavior, system prompt contribution, directly invocable functions, slash commands, and classification examples.
+
+### Key Decisions
+
+- **Static embedded joke data** — No external API or database; jokes are compiled into the assembly for zero-dependency operation.
+- **PluginHostContext constructor** — Used framework's `PluginHostContext` injection pattern for `ILoggerFactory` access, following extension plugin conventions.
+- **Classification contribution on plugin** — Plugin implements `IClassificationContributor` directly rather than through a separate standalone contributor, keeping routing metadata co-located with the tool it routes to.
+- **`tell_joke` as directly invocable** — Listed in `DirectlyInvocableFunctions` so external API callers can invoke it via `POST /api/v1/plugins/DadJokes/functions/tell_joke/invoke` without AI involvement.
+- **Error strings over exceptions** — `TellJokeAsync` catches all exceptions and returns error message strings, following the framework convention that lets the AI recover gracefully.
