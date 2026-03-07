@@ -2,35 +2,33 @@
 
 ## What This Is
 
-Dad Jokes plugin for Imeritas.Agent
+An extension plugin for the Imeritas.Agent framework that delivers contextually relevant dad jokes through chat and invocable functions. A lightweight, self-contained plugin used to validate the end-to-end delivery pipeline (scaffold → plan → decompose → implement).
 
 ## Project Structure
 
 ```
 Imeritas.Agent.DadJokes/
-├── src/
-│   ├── Imeritas.Agent.DadJokes/
-│   │   ├── Imeritas.Agent.DadJokes.csproj
-│   │   ├── Plugin/
-│   │   ├── Orchestrator/
-│   │   ├── Services/
-│   │   └── Models/
-│   └── Imeritas.Agent.DadJokes.Tests/
-│       └── Imeritas.Agent.DadJokes.Tests.csproj
-├── docs/
-│   ├── REQUIREMENTS.md
-│   ├── TODO.md
-│   ├── EVOLUTION.md
-│   ├── GAP_ANALYSIS.md
-│   ├── CONSIDERATIONS.md
-│   ├── DEPLOYMENT.md
-│   └── plan-schema.json
-├── Imeritas.Agent.DadJokes.slnx
-├── CLAUDE.md
+├── .gitignore
 ├── agent.yml
-├── README.md
+├── CLAUDE.md
+├── docs/
+├── docs/CONSIDERATIONS.md
+├── docs/DEPLOYMENT.md
+├── docs/EVOLUTION.md
+├── docs/GAP_ANALYSIS.md
+├── docs/plan-schema.json
+├── docs/REQUIREMENTS.md
+├── docs/TODO.md
+├── Imeritas.Agent.DadJokes.slnx
 ├── nuget.config
-└── .gitignore
+├── README.md
+├── src/Imeritas.Agent.DadJokes.Tests/
+├── src/Imeritas.Agent.DadJokes.Tests/Imeritas.Agent.DadJokes.Tests.csproj
+├── src/Imeritas.Agent.DadJokes/Imeritas.Agent.DadJokes.csproj
+├── src/Imeritas.Agent.DadJokes/Models/
+├── src/Imeritas.Agent.DadJokes/Orchestrator/
+├── src/Imeritas.Agent.DadJokes/Plugin/
+└── src/Imeritas.Agent.DadJokes/Services/
 ```
 
 ## Build & Test
