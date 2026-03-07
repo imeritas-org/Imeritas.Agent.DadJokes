@@ -83,9 +83,11 @@ public class DadJokeOrchestrator : ITaskOrchestrator
             }
 
             // 4. Fall back to random joke if no category match or no category
-            joke ??= _jokeService.GetRandom();
-
-            _logger.LogDebug("Using random joke (category={Category})", category ?? "(none)");
+            if (joke is null)
+            {
+                joke = _jokeService.GetRandom();
+                _logger.LogDebug("Using random joke (category={Category})", category ?? "(none)");
+            }
 
             // 5. Set result and mark completed
             task.OutputData["result"] = $"{joke.Setup} {joke.Punchline}";
