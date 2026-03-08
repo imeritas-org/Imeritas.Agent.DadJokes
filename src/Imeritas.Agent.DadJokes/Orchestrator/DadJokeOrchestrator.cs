@@ -1,4 +1,3 @@
-using Imeritas.Agent.DadJokes.Models;
 using Imeritas.Agent.DadJokes.Services;
 using Imeritas.Agent.Models;
 using Imeritas.Agent.Orchestrators;
@@ -8,29 +7,54 @@ using TaskStatus = Imeritas.Agent.Models.TaskStatus;
 
 namespace Imeritas.Agent.DadJokes.Orchestrator;
 
+/// <summary>
+/// A simple task orchestrator for the "dad_joke" task type.
+/// Selects a joke by category from the repository and returns it as the task result.
+/// Falls back to a random joke when no category match is found.
+/// </summary>
 public class DadJokeOrchestrator : ITaskOrchestrator
 {
-    private readonly JokeService _jokeService;
     private readonly IStorageService _storage;
     private readonly ILogger<DadJokeOrchestrator> _logger;
+    private readonly JokeRepository _repository;
 
-    public DadJokeOrchestrator(
-        JokeService jokeService,
-        IStorageService storage,
-        ILogger<DadJokeOrchestrator> logger)
+    /// <summary>
+    /// Creates a new instance of the DadJoke orchestrator.
+    /// Dependencies are resolved via standard DI (orchestrators are scoped).
+    /// </summary>
+    /// <param name="storage">Storage service for persisting task state.</param>
+    /// <param name="logger">Logger for diagnostics.</param>
+    public DadJokeOrchestrator(IStorageService storage, ILogger<DadJokeOrchestrator> logger)
     {
-        _jokeService = jokeService;
         _storage = storage;
         _logger = logger;
+        _repository = new JokeRepository();
     }
 
+    /// <summary>
+    /// Internal constructor for unit testing — allows injection of a custom <see cref="JokeRepository"/>.
+    /// </summary>
+    /// <param name="storage">Storage service for persisting task state.</param>
+    /// <param name="logger">Logger for diagnostics.</param>
+    /// <param name="repository">The joke repository to use.</param>
+    internal DadJokeOrchestrator(IStorageService storage, ILogger<DadJokeOrchestrator> logger, JokeRepository repository)
+    {
+        _storage = storage;
+        _logger = logger;
+        _repository = repository;
+    }
+
+    /// <inheritdoc />
     public string Name => "DadJoke";
 
+    /// <inheritdoc />
     public int Priority => 50;
 
+    /// <inheritdoc />
     public bool CanHandle(string tenantId, string? taskType, string prompt)
-        => taskType == "dad_joke";
+        => string.Equals(taskType, "dad_joke", StringComparison.OrdinalIgnoreCase);
 
+    /// <inheritdoc />
     public async Task<AgentTask> ExecuteAsync(
         string tenantId,
         string userId,
@@ -41,76 +65,82 @@ public class DadJokeOrchestrator : ITaskOrchestrator
         CancellationToken cancellationToken = default,
         ITaskProgressCallback? progress = null)
     {
-        // 1. Create AgentTask with queue-provided IDs (universal framework pattern)
         var task = new AgentTask
         {
-            TaskId = inputData?.TryGetValue("_queue_task_id", out var qtid) == true
-                && qtid is string qts && !string.IsNullOrEmpty(qts)
-                    ? qts : Guid.NewGuid().ToString(),
-            SessionId = inputData?.TryGetValue("_queue_session_id", out var qsid) == true
-                ? qsid?.ToString() : null,
             UserId = userId,
             Title = "Dad Joke",
             Description = prompt,
             Status = TaskStatus.Running,
             StartedAt = DateTime.UtcNow,
             OrchestratorName = Name,
-            InputData = inputData ?? new Dictionary<string, object>(),
             ParentTaskId = parentTaskId
         };
 
-        _logger.LogInformation("DadJoke orchestrator starting task {TaskId} for user {UserId}", task.TaskId, userId);
+        if (inputData != null)
+        {
+            foreach (var kvp in inputData)
+                task.InputData[kvp.Key] = kvp.Value;
+        }
+
+        task.ExecutionLog.Add($"DadJokeOrchestrator started for tenant {tenantId}");
 
         try
         {
-            // 2. Read optional category from inputData
-            string? category = null;
-            if (inputData?.TryGetValue("category", out var catObj) == true)
-            {
-                category = catObj?.ToString();
-            }
+            // Extract category from input data or prompt
+            var category = ExtractCategory(inputData, prompt);
 
-            // 3. Get joke from JokeService
-            DadJoke? joke = null;
-            if (!string.IsNullOrEmpty(category))
-            {
-                _logger.LogDebug("Looking up joke for category {Category}", category);
-                var jokes = _jokeService.GetByCategory(category);
-                if (jokes.Count > 0)
-                {
-                    joke = jokes[Random.Shared.Next(jokes.Count)];
-                }
-            }
+            if (progress != null)
+                await progress.ReportAsync("Finding the perfect dad joke...");
 
-            // 4. Fall back to random joke if no category match or no category
-            if (joke is null)
-            {
-                joke = _jokeService.GetRandom();
-                _logger.LogDebug("Using random joke (category={Category})", category ?? "(none)");
-            }
+            var joke = _repository.GetRandomByCategory(category);
 
-            // 5. Set result and mark completed
-            task.OutputData["result"] = $"{joke.Setup} {joke.Punchline}";
+            _logger.LogInformation(
+                "Selected joke {JokeId} for tenant {TenantId} (category: {Category})",
+                joke.Id, tenantId, category ?? "random");
+
+            task.OutputData["result"] = joke.ToString();
+            task.OutputData["jokeId"] = joke.Id;
+            task.OutputData["categories"] = string.Join(", ", joke.Categories);
             task.Status = TaskStatus.Completed;
             task.CompletedAt = DateTime.UtcNow;
-
-            _logger.LogInformation("DadJoke task {TaskId} completed successfully", task.TaskId);
+            task.ExecutionLog.Add($"Delivered joke {joke.Id}: {joke.Setup}");
         }
         catch (Exception ex)
         {
-            // 6. On exception, set Failed status with error details
-            _logger.LogError(ex, "DadJoke task {TaskId} failed", task.TaskId);
+            _logger.LogError(ex, "Error executing dad joke task for tenant {TenantId}", tenantId);
             task.Status = TaskStatus.Failed;
             task.ErrorMessage = ex.Message;
-            task.OutputData["result"] = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            // 7. Always save task before returning (framework convention)
-            task.LastUpdatedAt = DateTime.UtcNow;
-            await _storage.SaveTaskAsync(tenantId, task);
+            task.CompletedAt = DateTime.UtcNow;
+            task.ExecutionLog.Add($"Failed: {ex.Message}");
         }
 
+        await _storage.SaveTaskAsync(tenantId, task);
         return task;
+    }
+
+    /// <summary>
+    /// Extracts a joke category from the input data dictionary or the prompt text.
+    /// Checks inputData["category"] first, then scans the prompt for known category keywords.
+    /// </summary>
+    private string? ExtractCategory(Dictionary<string, object>? inputData, string prompt)
+    {
+        // Check inputData first
+        if (inputData?.TryGetValue("category", out var categoryObj) == true)
+        {
+            var cat = categoryObj?.ToString();
+            if (!string.IsNullOrWhiteSpace(cat))
+                return cat;
+        }
+
+        // Scan prompt for known categories
+        var knownCategories = _repository.GetCategories();
+        var lowerPrompt = prompt.ToLowerInvariant();
+        foreach (var cat in knownCategories)
+        {
+            if (lowerPrompt.Contains(cat, StringComparison.OrdinalIgnoreCase))
+                return cat;
+        }
+
+        return null;
     }
 }

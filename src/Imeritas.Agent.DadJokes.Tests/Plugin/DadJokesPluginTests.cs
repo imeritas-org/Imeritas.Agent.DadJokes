@@ -1,7 +1,7 @@
 using Imeritas.Agent.DadJokes.Plugin;
+using Imeritas.Agent.DadJokes.Services;
 using Imeritas.Agent.Extensions;
 using Imeritas.Agent.Models;
-using Imeritas.Agent.Plugins;
 using Imeritas.Agent.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -12,7 +12,7 @@ namespace Imeritas.Agent.DadJokes.Tests.Plugin;
 
 public class DadJokesPluginTests
 {
-    private readonly DadJokesPlugin _plugin;
+    private readonly DadJokesPlugin _sut;
 
     public DadJokesPluginTests()
     {
@@ -22,66 +22,83 @@ public class DadJokesPluginTests
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         var configuration = Substitute.For<IConfiguration>();
 
-        var hostContext = new PluginHostContext(tenantContext, loggerFactory, httpClientFactory, configuration);
-        _plugin = new DadJokesPlugin(hostContext);
-    }
-
-    // ── Plugin Identity ──────────────────────────────────────────
-
-    [Fact]
-    public void Name_Always_ReturnsDadJokes()
-    {
-        Assert.Equal("DadJokes", _plugin.Name);
+        var host = new PluginHostContext(tenantContext, loggerFactory, httpClientFactory, configuration);
+        _sut = new DadJokesPlugin(host);
     }
 
     [Fact]
-    public void DirectlyInvocableFunctions_Always_ContainsTellJoke()
+    public void Name_ReturnsDadJokes()
     {
-        Assert.Contains("tell_joke", _plugin.DirectlyInvocableFunctions);
-    }
-
-    // ── IClassificationContributor ───────────────────────────────
-
-    [Fact]
-    public void ClassificationExamples_Always_IsNonEmpty()
-    {
-        var contributor = (IClassificationContributor)_plugin;
-        Assert.NotEmpty(contributor.ClassificationExamples);
+        Assert.Equal("DadJokes", _sut.Name);
     }
 
     [Fact]
-    public void SlashCommands_Always_ContainsJokeCommand()
+    public void DisplayName_ReturnsDadJokes()
     {
-        var contributor = (IClassificationContributor)_plugin;
-        Assert.Contains(contributor.SlashCommands, c => c.Command == "/joke");
+        Assert.Equal("Dad Jokes", _sut.DisplayName);
     }
 
-    // ── tell_joke Function ───────────────────────────────────────
+    [Fact]
+    public void DirectlyInvocableFunctions_ContainsTellJoke()
+    {
+        Assert.Contains("tell_joke", _sut.DirectlyInvocableFunctions);
+    }
 
     [Fact]
-    public async Task TellJoke_NoCategory_ReturnsFormattedJokeWithSetupAndPunchline()
+    public async Task TellJokeAsync_NoCategory_ReturnsJoke()
     {
-        var result = await _plugin.TellJokeAsync();
-
+        var result = await _sut.TellJokeAsync();
         Assert.False(string.IsNullOrWhiteSpace(result));
-        // The joke format is "{Setup}\n\n{Punchline}" — verify it contains a double newline
-        Assert.Contains("\n\n", result);
+        Assert.Contains("\u2014", result); // joke format: Setup — Punchline
     }
 
     [Fact]
-    public async Task TellJoke_ValidCategory_ReturnsJokeFromThatCategory()
+    public async Task TellJokeAsync_WithCategory_ReturnsJoke()
     {
-        var result = await _plugin.TellJokeAsync("technology");
+        var result = await _sut.TellJokeAsync("tech");
+        Assert.False(string.IsNullOrWhiteSpace(result));
+        Assert.Contains("\u2014", result);
+    }
 
+    [Fact]
+    public async Task TellJokeAsync_UnknownCategory_ReturnsFallbackJoke()
+    {
+        var result = await _sut.TellJokeAsync("nonexistent");
         Assert.False(string.IsNullOrWhiteSpace(result));
     }
 
     [Fact]
-    public async Task TellJoke_UnknownCategory_ReturnsRandomJokeNotError()
+    public async Task GetSystemPromptContributionAsync_ReturnsNonNullPrompt()
     {
-        var result = await _plugin.TellJokeAsync("nonexistent_category_xyz");
+        var result = await _sut.GetSystemPromptContributionAsync("tenant1");
+        Assert.NotNull(result);
+        Assert.Contains("Dad Jokes", result);
+        Assert.Contains("tell_joke", result);
+    }
 
-        Assert.False(string.IsNullOrWhiteSpace(result));
-        Assert.DoesNotContain("error", result, StringComparison.OrdinalIgnoreCase);
+    // ── IClassificationContributor ──
+
+    [Fact]
+    public void SlashCommands_ContainsJokeCommand()
+    {
+        Assert.Single(_sut.SlashCommands);
+        Assert.Equal("/joke", _sut.SlashCommands[0].Command);
+        Assert.Equal(IntentType.Task, _sut.SlashCommands[0].Intent);
+        Assert.Equal("dad_joke", _sut.SlashCommands[0].TaskType);
+    }
+
+    [Fact]
+    public void ClassificationExamples_ReturnsExamples()
+    {
+        Assert.NotEmpty(_sut.ClassificationExamples);
+        Assert.All(_sut.ClassificationExamples, ex =>
+            Assert.Equal("[task:dad_joke]", ex.ClassificationPrefix));
+    }
+
+    [Fact]
+    public void ClassificationHints_TargetsDadJokeTaskType()
+    {
+        Assert.Equal("dad_joke", _sut.ClassificationHints.TaskType);
+        Assert.Contains("joke", _sut.ClassificationHints.TaskTypeKeywords);
     }
 }
